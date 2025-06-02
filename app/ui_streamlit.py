@@ -3,19 +3,24 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
-st.set_page_config(page_title="Chatbot GenAI RRHH", layout="centered")
+st.set_page_config(page_title="Chatbot GenAI Plan de Desarrollo Institucional - UTP", layout="centered")
 
 from app.rag_pipeline import load_vectorstore_from_disk, build_chain
 
 
-st.title("🤖 Asistente de Recursos Humanos - Contoso")
+st.title("🤖 Asistente del PDI - UTP")
 
-question = st.text_input("Escribe tu pregunta sobre beneficios o políticas laborales:")
+question = st.text_input("Escribe tu pregunta sobre el plan de desarrollo institucional:")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # Cargar vectorstore y cadena
+# ui_streamlit.py  (línea ~18)
+vectordb = load_vectorstore_from_disk()
+print("Vector DB type =", type(vectordb))
+chain = build_chain(vectordb)
+
 vectordb = load_vectorstore_from_disk()
 chain = build_chain(vectordb)
 
@@ -28,4 +33,4 @@ if st.session_state.chat_history:
     st.markdown("---")    
     for q, a in reversed(st.session_state.chat_history):
         st.markdown(f"**🧑 Usuario:** {q}")
-        st.markdown(f"**🤖 Bot:** {a}")
+        st.markdown(f"**🤖 Bot PDI:** {a}")

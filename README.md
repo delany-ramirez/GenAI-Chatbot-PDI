@@ -1,17 +1,19 @@
-# 🤖 Chatbot GenAI - Caso de Estudio Recursos Humanos
+# 🤖 Chatbot GenAI - Caso de Estudio PDI-UTP  
 
-Este proyecto demuestra cómo construir, evaluar y automatizar un chatbot de tipo RAG (Retrieval Augmented Generation) con buenas prácticas de **GenAIOps**.
+> **Este fork se basa en el repositorio original de [GenAIOps_Pycon2025](https://github.com/darkanita/GenAIOps_Pycon2025) de @darkanita.**
+
+*(versión local con Ollama + RTX 4060 Ti)*
+
+Este proyecto demuestra cómo construir, evaluar y automatizar un chatbot **RAG** (Retrieval Augmented Generation) siguiendo buenas prácticas de **GenAIOps**, **sin depender de la API de OpenAI**: todos los modelos (LLM + embeddings) se ejecutan en tu propia GPU mediante **Ollama**.
 
 ---
 
 ## 🧠 Caso de Estudio
-
-El chatbot responde preguntas sobre beneficios, políticas internas y roles de una empresa ficticia (**Contoso Electronics**), usando como base una colección de documentos PDF internos.
+El chatbot responde preguntas sobre el **Plan de Desarrollo Institucional** de la Universidad Tecnológica de Pereira a partir de documentos PDF internos.
 
 ---
 
-## 📂 Estructura del Proyecto
-
+## 📂 Estructura del proyecto
 ```
 ├── app/
 │   ├── ui_streamlit.py           ← interfaz simple del chatbot
@@ -24,8 +26,7 @@ El chatbot responde preguntas sobre beneficios, políticas internas y roles de u
 ├── data/pdfs/                    ← documentos fuente
 ├── tests/
 │   ├── test_run_eval.py
-│   ├── eval_dataset.json         ← dataset de evaluación
-│   └── eval_dataset.csv
+│   ├── eval_questions_pdi.json         ← dataset de evaluación
 ├── .env.example
 ├── Dockerfile
 ├── .devcontainer/
@@ -42,139 +43,131 @@ El chatbot responde preguntas sobre beneficios, políticas internas y roles de u
 ### 1. 🧱 Preparación del entorno
 
 ```bash
-git clone https://github.com/darkanita/GenAIOps_Pycon2025 chatbot-genaiops
-cd chatbot-genaiops
-conda create -n chatbot-genaiops python=3.10 -y
-conda activate chatbot-genaiops
-pip install -r requirements.txt
-cp .env.example .env  # Agrega tu API KEY de OpenAI
+# 1-a. clona el repo
+git clone https://github.com/darkanita/GenAIOps_Pycon2025 chatbot-pdi
+cd chatbot-pdi
+
+# 1-b. crea el entorno
+conda create -n chatbot-pdi python=3.10 -y
+conda activate chatbot-pdi
+pip install -r requirements.txt      # incluye langchain-ollama
+
+# 1-c. instala Ollama (solo una vez)
+winget install --id Ollama.Ollama -e     # Windows
+# curl -fsSL https://ollama.ai/install.sh | sh   # macOS / Linux
+
+# 1-d. descarga los modelos locales
+ollama pull llama3:8b           # LLM principal
+ollama pull nomic-embed-text    # modelo de embeddings
+
+# 1-e. variables opcionales
+cp .env.example .env
+# Abre .env y ajusta:
+# OLLAMA_BASE_URL=http://localhost:11434
 ```
 
 ---
 
-### 2. 🔍 Ingesta y vectorización de documentos
-
-Procesa los PDFs y genera el índice vectorial:
+### 2. 🔍 Ingesta y vectorización
 
 ```bash
-python -c "from app.rag_pipeline import save_vectorstore; save_vectorstore()"
+python -m app.rag_pipeline --rebuild_index
 ```
 
-Esto:
-- Divide los documentos en chunks (por defecto `chunk_size=512`, `chunk_overlap=50`)
-- Genera embeddings con OpenAI
-- Guarda el índice vectorial en `vectorstore/`
-- Registra los parámetros en **MLflow**
+El script:
 
-🔧 Para personalizar:
+1. Carga PDFs de `data/pdfs/`.  
+2. Trocea en *chunks* (512/50 por defecto).  
+3. Genera *embeddings* con **`nomic-embed-text`** vía Ollama.  
+4. Guarda un índice **FAISS** en `data/vectorstore/`.  
+5. Registra parámetros en **MLflow**.
+
+Parámetros personalizables:
 ```python
 save_vectorstore(chunk_size=1024, chunk_overlap=100)
 ```
 
-♻️ Para reutilizarlo directamente:
+---
+
+### 3. 🧠 Pipeline RAG
+
 ```python
+from app.rag_pipeline import load_vectorstore_from_disk, build_chain
 vectordb = load_vectorstore_from_disk()
+chain    = build_chain(vectordb, prompt_version="v3_asistente_pdi")
 ```
+
+* Usa **\`ChatOllama\`** como LLM y el FAISS como *retriever*.
 
 ---
 
-### 3. 🧠 Construcción del pipeline RAG
+### 4. 💬 Interfaz Streamlit
 
-```python
-from app.rag_pipeline import build_chain
-chain = build_chain(vectordb, prompt_version="v1_asistente_rrhh")
-```
-
-- Soporta múltiples versiones de prompt
-- Usa `ConversationalRetrievalChain` con `LangChain` + `OpenAI`
-
----
-
-### 4. 💬 Interacción vía Streamlit
-
-Versión básica:
 ```bash
-streamlit run app/ui_streamlit.py
-```
-
-Versión combinada con métricas:
-```bash
-streamlit run app/main_interface.py
+streamlit run app/ui_streamlit.py        # UI básica
+# ó
+streamlit run app/main_interface.py      # UI + métricas
 ```
 
 ---
 
-### 5. 🧪 Evaluación automática de calidad
-
-Ejecuta:
+### 5. 🧪 Evaluación automática
 
 ```bash
 python app/run_eval.py
 ```
 
-Esto:
-- Usa `tests/eval_dataset.json` como ground truth
-- Genera respuestas usando el RAG actual
-- Evalúa con `LangChain Eval (QAEvalChain)`
-- Registra resultados en **MLflow**
+* Genera respuestas con el RAG local.  
+* Evalúa con **LangChain Eval** (`QAEvalChain`) usando **ChatOllama**.  
+* Registra métricas en **MLflow**.
 
 ---
 
-### 6. 📈 Visualización de resultados
-
-Dashboard completo:
+### 6. 📈 Dashboard de resultados
 
 ```bash
 streamlit run app/dashboard.py
 ```
 
-- Tabla con todas las preguntas evaluadas
-- Gráficos de precisión por configuración (`prompt + chunk_size`)
-- Filtrado por experimento MLflow
+---
+
+### 7. 🔁 Automatización CI (GitHub Actions)
+
+* `.github/workflows/eval.yml` – evaluación automática.  
+* `.github/workflows/test.yml` – pruebas unitarias.
 
 ---
 
-### 7. 🔁 Automatización con GitHub Actions
-
-- CI de evaluación: `.github/workflows/eval.yml`
-- Test unitarios: `.github/workflows/test.yml`
-
----
-
-### 8. 🧪 Validación automatizada
+### 8. 🧪 Validación
 
 ```bash
 pytest tests/test_run_eval.py
 ```
-
-- Evalúa que el sistema tenga al menos 80% de precisión con el dataset base
-
----
-
-## 🔍 ¿Qué puedes hacer?
-
-- 💬 Hacer preguntas al chatbot
-- 🔁 Evaluar diferentes estrategias de chunking y prompts
-- 📊 Comparar desempeño con métricas semánticas
-- 🧪 Trazar todo en MLflow
-- 🔄 Adaptar a otros dominios (legal, salud, educación…)
+Exige ≥ 80 % de precisión con el dataset base.
 
 ---
 
-## ⚙️ Stack Tecnológico
+## ⚙️ Stack tecnológico
 
-- **OpenAI + LangChain** – LLM + RAG
-- **FAISS** – Vectorstore
-- **Streamlit** – UI
-- **MLflow** – Registro de experimentos
-- **LangChain Eval** – Evaluación semántica
-- **GitHub Actions** – CI/CD
-- **DevContainer** – Desarrollo portable
+| Capa              | Tecnología                                     |
+|-------------------|------------------------------------------------|
+| **LLM**           | \`llama3:8b\` (vía **Ollama**)                   |
+| **Embeddings**    | \`nomic-embed-text\` (**Ollama**)                |
+| **RAG framework** | **LangChain** + **FAISS**                      |
+| **UI / MLOps**    | **Streamlit**, **MLflow**, **GitHub Actions**  |
+
+
+---
+
+## 🛠️ Requisitos de hardware
+
+* GPU con ≥ 8 GB VRAM (RTX 4060 Ti 16 GB recomendada).  
+* Driver NVIDIA 550+ y CUDA ≥ 12 (Ollama incluye cuBLAS).  
+* El modelo `llama3:8b` consume ~7 GB; ajusta `OLLAMA_NUM_GPU_LAYERS` si necesitas limitar VRAM.
 
 ---
 
 ## 🎓 Desafío para estudiantes
-
 🧩 Parte 1: Personalización
 
 1. Elige un nuevo dominio
