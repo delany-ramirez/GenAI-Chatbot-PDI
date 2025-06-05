@@ -44,7 +44,7 @@ El chatbot responde preguntas sobre el **Plan de Desarrollo Institucional** de l
 
 ```bash
 # 1-a. clona el repo
-git clone https://https://github.com/delany-ramirez/GenAI-Chatbot-PDI chatbot-pdi
+git clone https://github.com/delany-ramirez/GenAI-Chatbot-PDI chatbot-pdi
 cd chatbot-pdi
 
 # 1-b. crea el entorno
